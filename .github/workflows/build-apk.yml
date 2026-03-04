@@ -38,23 +38,31 @@ jobs:
     - name: Setup Android SDK
       uses: android-actions/setup-android@v3
 
+    - name: Install Capacitor CLI
+      run: npm install -g @capacitor/cli
+
     - name: Make gradlew executable
       run: chmod +x ./android/gradlew
 
     - name: Sync Capacitor
       run: npx cap sync
 
-    - name: Build APK
+    - name: Build APK with Gradle
       run: |
         cd android
-        ./gradlew assembleDebug --no-daemon
+        ./gradlew clean assembleDebug --no-daemon --stacktrace
+      env:
+        GRADLE_OPTS: -Dorg.gradle.jvmargs="-Xmx4g -XX:MaxMetaspaceSize=512m"
+
+    - name: List output files
+      run: ls -la android/app/build/outputs/apk/debug/ || echo "APK not found"
 
     - name: Upload APK
       uses: actions/upload-artifact@v4
       if: always()
       with:
         name: tangka-practice-apk
-        path: android/app/build/outputs/apk/debug/app-debug.apk
+        path: android/app/build/outputs/apk/debug/
         retention-days: 30
 
     - name: Create Release
