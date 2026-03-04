@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">唐卡练习打卡</string>
+    <string name="title_activity_main">唐卡练习打卡</string>
+    <string name="package_name">com.tangka.practice</string>
+    <string name="custom_url_scheme">com.tangka.practice</string>
+</resources>
