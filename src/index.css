@@ -1,0 +1,140 @@
+@import "tailwindcss";
+
+@theme {
+  --color-tangka-red: #C62828;
+  --color-tangka-gold: #FFD700;
+  --color-tangka-cream: #FAF6F0;
+  --color-tangka-brown: #3E2723;
+  --color-tangka-sand: #E8DFD0;
+}
+
+@layer base {
+  html {
+    font-family: system-ui, -apple-system, sans-serif;
+  }
+  
+  body {
+    background-color: var(--color-tangka-cream);
+    color: var(--color-tangka-brown);
+    -webkit-tap-highlight-color: transparent;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    background-color: var(--color-tangka-red);
+    color: white;
+    padding: 0.75rem 1.5rem;
+    border-radius: 0.75rem;
+    font-weight: 500;
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+    transition: transform 0.15s;
+  }
+  
+  .btn-primary:active {
+    transform: scale(0.95);
+  }
+  
+  .btn-secondary {
+    background-color: var(--color-tangka-sand);
+    color: var(--color-tangka-brown);
+    padding: 0.75rem 1.5rem;
+    border-radius: 0.75rem;
+    font-weight: 500;
+    transition: transform 0.15s;
+  }
+  
+  .btn-secondary:active {
+    transform: scale(0.95);
+  }
+  
+  .card {
+    background-color: white;
+    border-radius: 1rem;
+    padding: 1rem;
+    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+    border: 1px solid var(--color-tangka-sand);
+  }
+  
+  .bg-tangka-red { background-color: var(--color-tangka-red); }
+  .bg-tangka-red\/10 { background-color: rgba(198, 40, 40, 0.1); }
+  .bg-tangka-red\/20 { background-color: rgba(198, 40, 40, 0.2); }
+  .bg-tangka-red\/30 { background-color: rgba(198, 40, 40, 0.3); }
+  .bg-tangka-red\/50 { background-color: rgba(198, 40, 40, 0.5); }
+  .bg-tangka-red\/70 { background-color: rgba(198, 40, 40, 0.7); }
+  
+  .bg-tangka-gold { background-color: var(--color-tangka-gold); }
+  .bg-tangka-gold\/5 { background-color: rgba(255, 215, 0, 0.05); }
+  .bg-tangka-gold\/10 { background-color: rgba(255, 215, 0, 0.1); }
+  .bg-tangka-gold\/20 { background-color: rgba(255, 215, 0, 0.2); }
+  .bg-tangka-gold\/30 { background-color: rgba(255, 215, 0, 0.3); }
+  
+  .bg-tangka-cream { background-color: var(--color-tangka-cream); }
+  .bg-tangka-brown { background-color: var(--color-tangka-brown); }
+  .bg-tangka-sand { background-color: var(--color-tangka-sand); }
+  .bg-tangka-sand\/30 { background-color: rgba(232, 223, 208, 0.3); }
+  .bg-tangka-sand\/50 { background-color: rgba(232, 223, 208, 0.5); }
+  
+  .bg-green-100 { background-color: #dcfce7; }
+  .bg-green-500 { background-color: #22c55e; }
+  .bg-blue-100 { background-color: #dbeafe; }
+  .bg-yellow-400 { background-color: #facc15; }
+  .bg-orange-500 { background-color: #f97316; }
+  .bg-purple-500 { background-color: #a855f7; }
+  .bg-red-50 { background-color: #fef2f2; }
+  .bg-red-500 { background-color: #ef4444; }
+  .bg-gray-100 { background-color: #f3f4f6; }
+  .bg-gray-200 { background-color: #e5e7eb; }
+  .bg-black\/50 { background-color: rgba(0, 0, 0, 0.5); }
+  .bg-black\/60 { background-color: rgba(0, 0, 0, 0.6); }
+  .bg-black\/70 { background-color: rgba(0, 0, 0, 0.7); }
+  .bg-white\/50 { background-color: rgba(255, 255, 255, 0.5); }
+  .bg-gradient-to-b { background-image: linear-gradient(to bottom, var(--tw-gradient-stops)); }
+  .bg-gradient-to-br { background-image: linear-gradient(to bottom right, var(--tw-gradient-stops)); }
+  .bg-gradient-to-r { background-image: linear-gradient(to right, var(--tw-gradient-stops)); }
+  
+  .text-tangka-red { color: var(--color-tangka-red); }
+  .text-tangka-gold { color: var(--color-tangka-gold); }
+  .text-tangka-brown { color: var(--color-tangka-brown); }
+  
+  .text-gray-300 { color: #d1d5db; }
+  .text-gray-400 { color: #9ca3af; }
+  .text-gray-500 { color: #6b7280; }
+  .text-gray-600 { color: #4b5563; }
+  .text-gray-700 { color: #374151; }
+  .text-gray-900 { color: #111827; }
+  .text-white { color: #ffffff; }
+  .text-white\/30 { color: rgba(255, 255, 255, 0.3); }
+  .text-white\/40 { color: rgba(255, 255, 255, 0.4); }
+  .text-white\/50 { color: rgba(255, 255, 255, 0.5); }
+  .text-white\/70 { color: rgba(255, 255, 255, 0.7); }
+  .text-yellow-400 { color: #facc15; }
+  .text-yellow-600 { color: #ca8a04; }
+  .text-green-600 { color: #16a34a; }
+  .text-blue-500 { color: #3b82f6; }
+  .text-orange-500 { color: #f97316; }
+  .text-purple-500 { color: #a855f7; }
+  .text-red-600 { color: #dc2626; }
+  
+  .border-tangka-sand { border-color: var(--color-tangka-sand); }
+  .border-tangka-red { border-color: var(--color-tangka-red); }
+  .border-tangka-red\/30 { border-color: rgba(198, 40, 40, 0.3); }
+  .border-white { border-color: #ffffff; }
+  .border-gray-200 { border-color: #e5e7eb; }
+  
+  .ring-tangka-red { --tw-ring-color: var(--color-tangka-red); }
+  .ring-tangka-gold { --tw-ring-color: var(--color-tangka-gold); }
+  .ring-tangka-red\/30 { --tw-ring-color: rgba(198, 40, 40, 0.3); }
+  
+  .accent-tangka-red { accent-color: var(--color-tangka-red); }
+  
+  .italic { font-style: italic; }
+  .tracking-wider { letter-spacing: 0.05em; }
+  .leading-relaxed { line-height: 1.625; }
+  
+  .aspect-square { aspect-ratio: 1 / 1; }
+  .aspect-video { aspect-ratio: 16 / 9; }
+  .aspect-\[9\/16\] { aspect-ratio: 9 / 16; }
+  
+  .text-\[10px\] { font-size: 10px; }
+}

@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" fill="#C62828" rx="64"/>
+  <circle cx="256" cy="256" r="160" fill="#FFD700" opacity="0.3"/>
+  <circle cx="256" cy="256" r="120" fill="none" stroke="#FFD700" stroke-width="8"/>
+  <circle cx="256" cy="256" r="80" fill="none" stroke="#FFD700" stroke-width="4"/>
+  <text x="256" y="280" font-family="system-ui, sans-serif" font-size="120" font-weight="bold" fill="white" text-anchor="middle">唐</text>
+</svg>
