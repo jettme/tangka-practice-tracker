@@ -1,5 +1,5 @@
-import { useRef, useState, useEffect } from 'react';
-import { Share2, Download, X } from 'lucide-react';
+import { useRef, useState, useEffect, useCallback } from 'react';
+import { Share2, Download, X, ChevronLeft } from 'lucide-react';
 import { format } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
 
@@ -23,8 +23,65 @@ export function ShareCard({
   note 
 }: ShareCardProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const modalRef = useRef<HTMLDivElement>(null);
   const [generatedImage, setGeneratedImage] = useState<string>('');
   const [isGenerating, setIsGenerating] = useState(false);
+  
+  // 触摸滑动相关
+  const touchStartX = useRef(0);
+  const touchStartY = useRef(0);
+  const touchEndX = useRef(0);
+
+  // 处理返回键（浏览器/安卓）
+  useEffect(() => {
+    if (!isOpen) return;
+
+    // 添加历史记录，使能使用返回键关闭
+    window.history.pushState({ modal: 'share' }, '');
+
+    const handlePopState = () => {
+      // 用户点击返回键，关闭弹窗
+      onClose();
+    };
+
+    // 监听返回事件
+    window.addEventListener('popstate', handlePopState);
+
+    // 监听 ESC 键
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isOpen, onClose]);
+
+  // 触摸开始
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    touchStartX.current = e.touches[0].clientX;
+    touchStartY.current = e.touches[0].clientY;
+  }, []);
+
+  // 触摸移动
+  const handleTouchMove = useCallback((e: React.TouchEvent) => {
+    touchEndX.current = e.touches[0].clientX;
+  }, []);
+
+  // 触摸结束 - 检测右滑返回
+  const handleTouchEnd = useCallback((e: React.TouchEvent) => {
+    const deltaX = touchEndX.current - touchStartX.current;
+    const deltaY = Math.abs(e.changedTouches[0].clientY - touchStartY.current);
+    
+    // 右滑超过 80px 且垂直滑动不超过 50px，触发返回
+    if (deltaX > 80 && deltaY < 50) {
+      onClose();
+    }
+  }, [onClose]);
 
   useEffect(() => {
     if (isOpen && canvasRef.current) {
@@ -222,10 +279,24 @@ export function ShareCard({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
-      <div className="bg-tangka-cream rounded-3xl w-full max-w-sm overflow-hidden animate-in">
+    <div 
+      ref={modalRef}
+      className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4"
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+    >
+      <div className="bg-tangka-cream rounded-3xl w-full max-w-sm overflow-hidden animate-in relative">
+        {/* 返回按钮 - 新增 */}
+        <button 
+          onClick={onClose}
+          className="absolute top-4 left-4 z-10 p-2 bg-white/80 backdrop-blur rounded-full shadow-sm hover:bg-white transition-colors"
+        >
+          <ChevronLeft className="w-5 h-5" />
+        </button>
+
         {/* 头部 */}
-        <div className="flex justify-between items-center p-4 border-b border-tangka-sand">
+        <div className="flex justify-between items-center p-4 border-b border-tangka-sand pl-16">
           <h3 className="font-bold text-lg">分享打卡</h3>
           <button 
             onClick={onClose}
@@ -233,6 +304,11 @@ export function ShareCard({
           >
             <X className="w-5 h-5" />
           </button>
+        </div>
+
+        {/* 滑动提示 - 新增 */}
+        <div className="absolute top-1/2 left-2 transform -translate-y-1/2 opacity-30 pointer-events-none">
+          <div className="w-1 h-12 bg-white rounded-full" />
         </div>
 
         {/* 预览区域 */}
@@ -282,10 +358,10 @@ export function ShareCard({
           </button>
         </div>
 
-        {/* 提示 */}
-        <div className="px-4 pb-4">
-          <p className="text-xs text-gray-400 text-center">
-            保存图片后可分享到微信、微博等社交平台
+        {/* 手势提示 */}
+        <div className="px-4 pb-4 text-center">
+          <p className="text-xs text-gray-400">
+            ← 右滑返回 | 点击左上角返回
           </p>
         </div>
       </div>

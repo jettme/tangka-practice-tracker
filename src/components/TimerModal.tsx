@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef } from 'react';
-import { Play, Pause, Square, Volume2, VolumeX, Music, CheckCircle2, Circle } from 'lucide-react';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { Play, Pause, Volume2, VolumeX, Music, CheckCircle2, Circle, ChevronLeft } from 'lucide-react';
 
 interface TimerModalProps {
   isOpen: boolean;
@@ -59,6 +59,11 @@ export function TimerModal({
   const [audioError, setAudioError] = useState(false);
   
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  
+  // 触摸滑动相关
+  const touchStartX = useRef(0);
+  const touchStartY = useRef(0);
+  const touchEndX = useRef(0);
 
   // 清理函数
   useEffect(() => {
@@ -96,6 +101,30 @@ export function TimerModal({
     }
   }, [isOpen]);
 
+  // 处理返回键（浏览器/安卓）
+  useEffect(() => {
+    if (!isOpen) return;
+
+    // 添加历史记录，使能使用返回键关闭
+    window.history.pushState({ modal: 'timer' }, '');
+
+    const handlePopState = () => {
+      if (seconds > 0 && !showComplete) {
+        // 如果有练习记录，询问是否退出
+        stopTimer();
+      } else {
+        onClose();
+      }
+    };
+
+    // 监听返回事件
+    window.addEventListener('popstate', handlePopState);
+
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+    };
+  }, [isOpen, seconds, showComplete, onClose]);
+
   // 计时器逻辑
   useEffect(() => {
     if (isRunning) {
@@ -114,6 +143,32 @@ export function TimerModal({
       }
     };
   }, [isRunning]);
+
+  // 触摸开始
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    touchStartX.current = e.touches[0].clientX;
+    touchStartY.current = e.touches[0].clientY;
+  }, []);
+
+  // 触摸移动
+  const handleTouchMove = useCallback((e: React.TouchEvent) => {
+    touchEndX.current = e.touches[0].clientX;
+  }, []);
+
+  // 触摸结束 - 检测右滑返回
+  const handleTouchEnd = useCallback((e: React.TouchEvent) => {
+    const deltaX = touchEndX.current - touchStartX.current;
+    const deltaY = Math.abs(e.changedTouches[0].clientY - touchStartY.current);
+    
+    // 右滑超过 80px 且垂直滑动不超过 50px，触发返回
+    if (deltaX > 80 && deltaY < 50) {
+      if (seconds > 0 && !showComplete) {
+        stopTimer();
+      } else {
+        onClose();
+      }
+    }
+  }, [seconds, showComplete, onClose]);
 
   const startTimer = async () => {
     setIsRunning(true);
@@ -235,9 +290,22 @@ export function TimerModal({
   // 完成界面
   if (showComplete) {
     return (
-      <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-        <div className="bg-tangka-cream rounded-3xl w-full max-w-md p-6 animate-in max-h-[90vh] overflow-y-auto">
-          <div className="text-center mb-6">
+      <div 
+        className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4"
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+      >
+        <div className="bg-tangka-cream rounded-3xl w-full max-w-md p-6 animate-in max-h-[90vh] overflow-y-auto relative">
+          {/* 返回按钮 */}
+          <button 
+            onClick={onClose}
+            className="absolute top-4 left-4 p-2 hover:bg-tangka-sand rounded-full"
+          >
+            <ChevronLeft className="w-6 h-6" />
+          </button>
+          
+          <div className="text-center mb-6 pt-8">
             <div className="w-20 h-20 bg-tangka-gold/20 rounded-full flex items-center justify-center mx-auto mb-4">
               <Music className="w-10 h-10 text-tangka-gold" />
             </div>
@@ -333,14 +401,20 @@ export function TimerModal({
 
   // 计时界面
   return (
-    <div className="fixed inset-0 bg-gradient-to-b from-tangka-brown to-tangka-brown/90 z-50 flex flex-col">
+    <div 
+      className="fixed inset-0 bg-gradient-to-b from-tangka-brown to-tangka-brown/90 z-50 flex flex-col"
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+    >
       {/* 顶部控制栏 */}
       <div className="flex justify-between items-center p-4 pt-12">
         <button
           onClick={stopTimer}
-          className="p-2 text-white/70 hover:text-white"
+          className="p-2 text-white/70 hover:text-white flex items-center gap-1"
         >
-          <Square className="w-6 h-6" />
+          <ChevronLeft className="w-6 h-6" />
+          <span className="text-sm">返回</span>
         </button>
         
         <div className="flex gap-2">
@@ -382,6 +456,11 @@ export function TimerModal({
         )}
       </div>
 
+      {/* 滑动提示 */}
+      <div className="absolute top-1/2 left-2 transform -translate-y-1/2 opacity-30 pointer-events-none">
+        <div className="w-1 h-12 bg-white rounded-full" />
+      </div>
+
       {/* 底部控制 */}
       <div className="p-8 pb-16">
         <div className="flex justify-center gap-6">
@@ -404,6 +483,9 @@ export function TimerModal({
         
         <p className="text-center text-white/40 text-sm mt-6">
           {isRunning ? '专注练习中...' : '点击开始练习'}
+        </p>
+        <p className="text-center text-white/20 text-xs mt-2">
+          ← 右滑返回
         </p>
       </div>
     </div>
