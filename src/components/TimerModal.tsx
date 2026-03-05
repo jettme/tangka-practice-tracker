@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Play, Pause, Volume2, VolumeX, Music, CheckCircle2, Circle, ChevronLeft } from 'lucide-react';
+import { Play, Pause, Volume2, VolumeX, Music, CheckCircle2, Circle, ChevronLeft, Plus, Trash2 } from 'lucide-react';
 
 interface TimerModalProps {
   isOpen: boolean;
@@ -11,29 +11,42 @@ interface TimerModalProps {
   existingDuration?: number;
 }
 
-// 内置音乐列表（使用免费的放松音乐/佛教音乐）
-const MUSIC_TRACKS = [
+interface MusicTrack {
+  id: string;
+  name: string;
+  url: string;
+  type: 'built-in' | 'custom';
+}
+
+// 内置音乐列表（使用可靠的 CDN 资源）
+const BUILT_IN_TRACKS: MusicTrack[] = [
   {
+    id: 'builtin-1',
     name: '静心禅音',
-    url: 'https://cdn.pixabay.com/download/audio/2022/05/27/audio_1808fbf07a.mp3?filename=meditation-impulse-10882.mp3',
-    type: 'meditation'
+    url: 'https://cdn.pixabay.com/audio/2022/05/27/audio_1808fbf07a.mp3',
+    type: 'built-in'
   },
   {
-    name: ' Buddhist Chant',
-    url: 'https://cdn.pixabay.com/download/audio/2022/10/14/audio_9939f792cb.mp3?filename=buddhist-chant-31826.mp3',
-    type: 'buddhist'
+    id: 'builtin-2',
+    name: '藏传颂钵',
+    url: 'https://cdn.pixabay.com/audio/2022/03/24/audio_5e5c7c68e7.mp3',
+    type: 'built-in'
   },
   {
-    name: '西藏颂钵',
-    url: 'https://cdn.pixabay.com/download/audio/2022/03/24/audio_5e5c7c68e7.mp3?filename=tibetan-singing-bowl-7389.mp3',
-    type: 'bowl'
+    id: 'builtin-3',
+    name: '山间流水',
+    url: 'https://cdn.pixabay.com/audio/2021/09/06/audio_825bbf3e4c.mp3',
+    type: 'built-in'
   },
   {
-    name: '流水禅心',
-    url: 'https://cdn.pixabay.com/download/audio/2021/09/06/audio_825bbf3e4c.mp3?filename=relaxing-mountains-rivers-streams-birds-singing-18178.mp3',
-    type: 'nature'
+    id: 'builtin-4',
+    name: '晨钟暮鼓',
+    url: 'https://cdn.pixabay.com/audio/2022/01/18/audio_d0a13f69d2.mp3',
+    type: 'built-in'
   }
 ];
+
+const STORAGE_KEY = 'tangka-custom-music';
 
 export function TimerModal({ 
   isOpen, 
@@ -51,12 +64,14 @@ export function TimerModal({
   const [isCompleteWork, setIsCompleteWork] = useState(initialIsCompleteWork);
   const [showComplete, setShowComplete] = useState(false);
   
-  // 音频相关
+  // 音乐相关
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  const [currentTrack, setCurrentTrack] = useState(0);
+  const [musicTracks, setMusicTracks] = useState<MusicTrack[]>(BUILT_IN_TRACKS);
+  const [currentTrackIndex, setCurrentTrackIndex] = useState(0);
   const [isMuted, setIsMuted] = useState(false);
   const [audioLoaded, setAudioLoaded] = useState(false);
-  const [audioError, setAudioError] = useState(false);
+  const [audioError, setAudioError] = useState<string | null>(null);
+  const [showMusicPanel, setShowMusicPanel] = useState(false);
   
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   
@@ -65,65 +80,190 @@ export function TimerModal({
   const touchStartY = useRef(0);
   const touchEndX = useRef(0);
 
-  // 清理函数
+  // 加载自定义音乐
   useEffect(() => {
-    return () => {
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
+    const stored = localStorage.getItem(STORAGE_KEY);
+    if (stored) {
+      try {
+        const customTracks: MusicTrack[] = JSON.parse(stored);
+        setMusicTracks([...BUILT_IN_TRACKS, ...customTracks]);
+      } catch {
+        console.error('Failed to load custom music');
       }
-      if (audioRef.current) {
-        audioRef.current.pause();
-        audioRef.current = null;
-      }
-    };
+    }
   }, []);
 
-  // 初始化音频
-  useEffect(() => {
-    if (isOpen && !audioRef.current) {
-      const audio = new Audio(MUSIC_TRACKS[0].url);
-      audio.loop = true;
-      audio.volume = 0.5;
-      audio.preload = 'auto';
-      
-      audio.addEventListener('canplaythrough', () => {
-        setAudioLoaded(true);
-        setAudioError(false);
-      });
-      
-      audio.addEventListener('error', () => {
-        console.warn('音频加载失败，继续无音乐模式');
-        setAudioError(true);
-        setAudioLoaded(true);
-      });
-      
-      audioRef.current = audio;
-    }
-  }, [isOpen]);
+  // 保存自定义音乐
+  const saveCustomMusic = (tracks: MusicTrack[]) => {
+    const customTracks = tracks.filter(t => t.type === 'custom');
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(customTracks));
+  };
 
   // 处理返回键（浏览器/安卓）
   useEffect(() => {
     if (!isOpen) return;
 
-    // 添加历史记录，使能使用返回键关闭
     window.history.pushState({ modal: 'timer' }, '');
 
     const handlePopState = () => {
       if (seconds > 0 && !showComplete) {
-        // 如果有练习记录，询问是否退出
         stopTimer();
       } else {
         onClose();
       }
     };
 
-    // 监听返回事件
     window.addEventListener('popstate', handlePopState);
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (showMusicPanel) {
+          setShowMusicPanel(false);
+        } else if (seconds > 0 && !showComplete) {
+          stopTimer();
+        } else {
+          onClose();
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
 
     return () => {
       window.removeEventListener('popstate', handlePopState);
+      window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [isOpen, seconds, showComplete, onClose]);
+  }, [isOpen, seconds, showComplete, onClose, showMusicPanel]);
+
+  // 初始化音频
+  useEffect(() => {
+    if (isOpen && !audioRef.current) {
+      initAudio();
+    }
+    
+    return () => {
+      // 清理函数在组件卸载时调用
+    };
+  }, [isOpen]);
+
+  const initAudio = () => {
+    const track = musicTracks[currentTrackIndex];
+    if (!track) return;
+
+    // 清理旧音频
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current = null;
+    }
+
+    const audio = new Audio();
+    audio.crossOrigin = 'anonymous';
+    audio.loop = true;
+    audio.volume = 0.5;
+    
+    // 事件监听
+    audio.addEventListener('canplaythrough', () => {
+      setAudioLoaded(true);
+      setAudioError(null);
+      console.log('Audio loaded:', track.name);
+    });
+    
+    audio.addEventListener('error', (e) => {
+      console.error('Audio error:', e);
+      setAudioError(`无法加载: ${track.name}`);
+      setAudioLoaded(true);
+    });
+
+    audio.addEventListener('stalled', () => {
+      console.warn('Audio stalled');
+    });
+
+    // 设置源并加载
+    audio.src = track.url;
+    audio.load();
+    
+    audioRef.current = audio;
+  };
+
+  // 切换音轨
+  const changeTrack = (index?: number) => {
+    const newIndex = index !== undefined ? index : (currentTrackIndex + 1) % musicTracks.length;
+    setCurrentTrackIndex(newIndex);
+    
+    // 重新初始化音频
+    const wasPlaying = isRunning && audioRef.current && !audioRef.current.paused;
+    
+    setAudioLoaded(false);
+    setAudioError(null);
+    
+    // 延迟初始化，让状态更新
+    setTimeout(() => {
+      const track = musicTracks[newIndex];
+      if (!track || !audioRef.current) return;
+
+      audioRef.current.src = track.url;
+      audioRef.current.load();
+      
+      if (wasPlaying && !isMuted) {
+        audioRef.current.play().catch(err => {
+          console.warn('Auto-play failed:', err);
+        });
+      }
+    }, 100);
+  };
+
+  // 添加自定义音乐
+  const handleAddMusic = () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'audio/mp3,audio/mpeg,audio/wav,audio/ogg';
+    input.onchange = (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0];
+      if (!file) return;
+      
+      // 检查文件大小（限制 10MB）
+      if (file.size > 10 * 1024 * 1024) {
+        alert('文件太大，请选择小于 10MB 的音频文件');
+        return;
+      }
+      
+      const reader = new FileReader();
+      reader.onload = () => {
+        const newTrack: MusicTrack = {
+          id: `custom-${Date.now()}`,
+          name: file.name.replace(/\.[^/.]+$/, ''), // 去掉扩展名
+          url: reader.result as string,
+          type: 'custom'
+        };
+        
+        const newTracks = [...musicTracks, newTrack];
+        setMusicTracks(newTracks);
+        saveCustomMusic(newTracks);
+        
+        // 切换到新添加的音乐
+        setTimeout(() => changeTrack(newTracks.length - 1), 100);
+        
+        alert(`已添加: ${newTrack.name}`);
+      };
+      reader.readAsDataURL(file);
+    };
+    input.click();
+  };
+
+  // 删除自定义音乐
+  const handleDeleteMusic = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!confirm('确定删除这首音乐吗？')) return;
+    
+    const trackIndex = musicTracks.findIndex(t => t.id === id);
+    const newTracks = musicTracks.filter(t => t.id !== id);
+    setMusicTracks(newTracks);
+    saveCustomMusic(newTracks);
+    
+    // 如果删除的是当前播放的，切换到第一首
+    if (trackIndex === currentTrackIndex) {
+      changeTrack(0);
+    }
+  };
 
   // 计时器逻辑
   useEffect(() => {
@@ -144,36 +284,35 @@ export function TimerModal({
     };
   }, [isRunning]);
 
-  // 触摸开始
+  // 触摸事件处理
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
     touchStartX.current = e.touches[0].clientX;
     touchStartY.current = e.touches[0].clientY;
   }, []);
 
-  // 触摸移动
   const handleTouchMove = useCallback((e: React.TouchEvent) => {
     touchEndX.current = e.touches[0].clientX;
   }, []);
 
-  // 触摸结束 - 检测右滑返回
   const handleTouchEnd = useCallback((e: React.TouchEvent) => {
     const deltaX = touchEndX.current - touchStartX.current;
     const deltaY = Math.abs(e.changedTouches[0].clientY - touchStartY.current);
     
-    // 右滑超过 80px 且垂直滑动不超过 50px，触发返回
     if (deltaX > 80 && deltaY < 50) {
-      if (seconds > 0 && !showComplete) {
+      if (showMusicPanel) {
+        setShowMusicPanel(false);
+      } else if (seconds > 0 && !showComplete) {
         stopTimer();
       } else {
         onClose();
       }
     }
-  }, [seconds, showComplete, onClose]);
+  }, [seconds, showComplete, onClose, showMusicPanel]);
 
   const startTimer = async () => {
     setIsRunning(true);
     
-    if (audioRef.current && !isMuted && !audioError) {
+    if (audioRef.current && !isMuted) {
       try {
         await audioRef.current.play();
       } catch (e) {
@@ -216,21 +355,6 @@ export function TimerModal({
     } else {
       setIsMuted(true);
       audioRef.current.pause();
-    }
-  };
-
-  const changeTrack = () => {
-    const nextTrack = (currentTrack + 1) % MUSIC_TRACKS.length;
-    setCurrentTrack(nextTrack);
-    
-    if (audioRef.current) {
-      const wasPlaying = !audioRef.current.paused;
-      audioRef.current.src = MUSIC_TRACKS[nextTrack].url;
-      audioRef.current.load();
-      
-      if (wasPlaying && !isMuted) {
-        audioRef.current.play().catch(console.warn);
-      }
     }
   };
 
@@ -286,6 +410,95 @@ export function TimerModal({
   };
 
   if (!isOpen) return null;
+
+  const currentTrack = musicTracks[currentTrackIndex];
+
+  // 音乐选择面板
+  if (showMusicPanel) {
+    return (
+      <div 
+        className="fixed inset-0 bg-black/80 z-50 flex flex-col"
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+      >
+        {/* 顶部栏 */}
+        <div className="flex items-center justify-between p-4 pt-12 bg-tangka-brown">
+          <button
+            onClick={() => setShowMusicPanel(false)}
+            className="flex items-center gap-1 text-white/80 hover:text-white"
+          >
+            <ChevronLeft className="w-6 h-6" />
+            <span>返回</span>
+          </button>
+          <h2 className="text-white font-bold">选择音乐</h2>
+          <button
+            onClick={handleAddMusic}
+            className="p-2 bg-tangka-red rounded-full text-white"
+          >
+            <Plus className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* 音乐列表 */}
+        <div className="flex-1 overflow-y-auto bg-tangka-cream p-4">
+          <div className="space-y-3">
+            {musicTracks.map((track, index) => (
+              <div
+                key={track.id}
+                onClick={() => {
+                  changeTrack(index);
+                  setShowMusicPanel(false);
+                }}
+                className={`
+                  p-4 rounded-xl flex items-center gap-3 cursor-pointer
+                  ${currentTrackIndex === index 
+                    ? 'bg-tangka-red text-white' 
+                    : 'bg-white hover:bg-tangka-sand/50'
+                  }
+                `}
+              >
+                <Music className="w-5 h-5 flex-shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium truncate">{track.name}</p>
+                  <p className="text-xs opacity-70">
+                    {track.type === 'built-in' ? '内置音乐' : '自定义音乐'}
+                  </p>
+                </div>
+                {currentTrackIndex === index && (
+                  <span className="text-xs px-2 py-1 bg-white/20 rounded-full">
+                    播放中
+                  </span>
+                )}
+                {track.type === 'custom' && (
+                  <button
+                    onClick={(e) => handleDeleteMusic(track.id, e)}
+                    className="p-2 hover:bg-red-500 rounded-full transition-colors"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+
+          {/* 添加音乐提示 */}
+          <div className="mt-6 p-4 bg-tangka-sand/30 rounded-xl">
+            <h3 className="font-bold mb-2">添加自己的音乐</h3>
+            <p className="text-sm text-gray-600 mb-3">
+              点击右上角 + 按钮，选择 MP3 格式的音乐文件（最大 10MB）
+            </p>
+            <button
+              onClick={handleAddMusic}
+              className="w-full py-3 rounded-xl bg-tangka-red text-white font-medium"
+            >
+              添加本地音乐
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // 完成界面
   if (showComplete) {
@@ -411,7 +624,7 @@ export function TimerModal({
       <div className="flex justify-between items-center p-4 pt-12">
         <button
           onClick={stopTimer}
-          className="p-2 text-white/70 hover:text-white flex items-center gap-1"
+          className="flex items-center gap-1 text-white/70 hover:text-white"
         >
           <ChevronLeft className="w-6 h-6" />
           <span className="text-sm">返回</span>
@@ -419,11 +632,13 @@ export function TimerModal({
         
         <div className="flex gap-2">
           <button
-            onClick={changeTrack}
-            className="p-2 text-white/70 hover:text-white flex items-center gap-1"
+            onClick={() => setShowMusicPanel(true)}
+            className="p-2 text-white/70 hover:text-white flex items-center gap-1 bg-white/10 rounded-full"
           >
             <Music className="w-5 h-5" />
-            <span className="text-xs">{MUSIC_TRACKS[currentTrack].name}</span>
+            <span className="text-xs max-w-[80px] truncate">
+              {currentTrack?.name || '选择音乐'}
+            </span>
           </button>
           <button
             onClick={toggleMusic}
@@ -449,10 +664,15 @@ export function TimerModal({
 
         {/* 音乐状态 */}
         {audioError && (
-          <p className="text-yellow-400 text-xs mt-4">音乐加载失败，以静音模式继续</p>
+          <p className="text-yellow-400 text-xs mt-4">{audioError}</p>
         )}
         {!audioLoaded && !audioError && (
           <p className="text-white/30 text-xs mt-4">正在加载音乐...</p>
+        )}
+        {audioLoaded && !audioError && !isMuted && (
+          <p className="text-white/30 text-xs mt-4">
+            正在播放: {currentTrack?.name}
+          </p>
         )}
       </div>
 
@@ -485,7 +705,7 @@ export function TimerModal({
           {isRunning ? '专注练习中...' : '点击开始练习'}
         </p>
         <p className="text-center text-white/20 text-xs mt-2">
-          ← 右滑返回
+          ← 右滑返回 | 点击音乐按钮切换
         </p>
       </div>
     </div>
