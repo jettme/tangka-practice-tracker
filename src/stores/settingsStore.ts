@@ -159,17 +159,7 @@ export function showReminderNotification() {
       badge: '/icons/icon-72x72.png',
       tag: 'tangka-daily-reminder',
       requireInteraction: true,
-      actions: [
-        {
-          action: 'practice',
-          title: '开始练习'
-        },
-        {
-          action: 'dismiss',
-          title: '稍后再说'
-        }
-      ]
-    });
+    } as NotificationOptions);
     
     notification.onclick = () => {
       window.focus();
@@ -217,7 +207,7 @@ function showTestNotification() {
 }
 
 // 设置每日提醒检查
-function setupDailyReminderCheck(time: string) {
+function setupDailyReminderCheck(_time: string) {
   clearReminderInterval();
   
   // 每分钟检查一次
