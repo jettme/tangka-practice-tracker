@@ -1,0 +1,58 @@
+===========================================
+  唐卡练习打卡 - 离线音乐添加说明
+===========================================
+
+📁 此目录用于存放离线音乐文件
+
+📋 添加步骤：
+
+1. 准备 4 首 MP3 格式的音乐文件
+   - 建议：冥想音乐、禅音、佛教音乐、自然声音
+   - 时长：5-15 分钟（可循环播放）
+   - 大小：每首建议 3-10MB
+
+2. 重命名文件为：
+   track1.mp3  - 静心禅音
+   track2.mp3  - 藏传颂钵
+   track3.mp3  - 山间流水
+   track4.mp3  - 晨钟暮鼓
+
+3. 将文件复制到此目录
+   路径：tangka-pwa/public/music/
+
+4. 重新构建 APK
+   npm run build
+   npx cap sync
+   cd android
+   ./gradlew assembleDebug
+
+===========================================
+
+🌐 免费音乐资源网站：
+
+1. Pixabay Music
+   https://pixabay.com/music/search/meditation/
+   - 免费商用，无需署名
+
+2. Mixkit
+   https://mixkit.co/free-stock-music/tag/meditation/
+   - 免费商用
+
+3. Freesound
+   https://freesound.org/search/?q=meditation
+   - 需要注册，注意授权类型
+
+4. Bensound
+   https://www.bensound.com/royalty-free-music/tag/meditation
+   - 免费使用需署名
+
+===========================================
+
+⚠️ 注意事项：
+
+- 仅支持 MP3 格式
+- 文件会自动打包到 APK 中
+- 无需网络，离线即可播放
+- 你也可以在 App 内添加更多自定义音乐
+
+===========================================

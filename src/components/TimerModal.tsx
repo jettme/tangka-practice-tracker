@@ -18,32 +18,12 @@ interface MusicTrack {
   type: 'built-in' | 'custom';
 }
 
-// 内置音乐列表（使用可靠的 CDN 资源）
+// 内置离线音乐（存放在 public/music/ 目录）
 const BUILT_IN_TRACKS: MusicTrack[] = [
-  {
-    id: 'builtin-1',
-    name: '静心禅音',
-    url: 'https://cdn.pixabay.com/audio/2022/05/27/audio_1808fbf07a.mp3',
-    type: 'built-in'
-  },
-  {
-    id: 'builtin-2',
-    name: '藏传颂钵',
-    url: 'https://cdn.pixabay.com/audio/2022/03/24/audio_5e5c7c68e7.mp3',
-    type: 'built-in'
-  },
-  {
-    id: 'builtin-3',
-    name: '山间流水',
-    url: 'https://cdn.pixabay.com/audio/2021/09/06/audio_825bbf3e4c.mp3',
-    type: 'built-in'
-  },
-  {
-    id: 'builtin-4',
-    name: '晨钟暮鼓',
-    url: 'https://cdn.pixabay.com/audio/2022/01/18/audio_d0a13f69d2.mp3',
-    type: 'built-in'
-  }
+  { id: 'builtin-1', name: '静心禅音', url: '/music/track1.mp3', type: 'built-in' },
+  { id: 'builtin-2', name: '藏传颂钵', url: '/music/track2.mp3', type: 'built-in' },
+  { id: 'builtin-3', name: '山间流水', url: '/music/track3.mp3', type: 'built-in' },
+  { id: 'builtin-4', name: '晨钟暮鼓', url: '/music/track4.mp3', type: 'built-in' },
 ];
 
 const STORAGE_KEY = 'tangka-custom-music';
@@ -99,7 +79,7 @@ export function TimerModal({
     localStorage.setItem(STORAGE_KEY, JSON.stringify(customTracks));
   };
 
-  // 处理返回键（浏览器/安卓）
+  // 处理返回键
   useEffect(() => {
     if (!isOpen) return;
 
@@ -149,35 +129,28 @@ export function TimerModal({
     const track = musicTracks[currentTrackIndex];
     if (!track) return;
 
-    // 清理旧音频
     if (audioRef.current) {
       audioRef.current.pause();
       audioRef.current = null;
     }
 
     const audio = new Audio();
-    audio.crossOrigin = 'anonymous';
     audio.loop = true;
     audio.volume = 0.5;
     
-    // 事件监听
     audio.addEventListener('canplaythrough', () => {
       setAudioLoaded(true);
       setAudioError(null);
       console.log('Audio loaded:', track.name);
     });
     
-    audio.addEventListener('error', (e) => {
-      console.error('Audio error:', e);
-      setAudioError(`无法加载: ${track.name}`);
+    audio.addEventListener('error', () => {
+      console.error('Audio error:', track.url);
+      setAudioError(`无法加载: ${track.name}，请检查音乐文件是否存在`);
       setAudioLoaded(true);
     });
 
-    audio.addEventListener('stalled', () => {
-      console.warn('Audio stalled');
-    });
-
-    // 设置源并加载
+    // 使用相对路径，支持离线播放
     audio.src = track.url;
     audio.load();
     
@@ -189,13 +162,11 @@ export function TimerModal({
     const newIndex = index !== undefined ? index : (currentTrackIndex + 1) % musicTracks.length;
     setCurrentTrackIndex(newIndex);
     
-    // 重新初始化音频
     const wasPlaying = isRunning && audioRef.current && !audioRef.current.paused;
     
     setAudioLoaded(false);
     setAudioError(null);
     
-    // 延迟初始化，让状态更新
     setTimeout(() => {
       const track = musicTracks[newIndex];
       if (!track || !audioRef.current) return;
@@ -220,7 +191,6 @@ export function TimerModal({
       const file = (e.target as HTMLInputElement).files?.[0];
       if (!file) return;
       
-      // 检查文件大小（限制 10MB）
       if (file.size > 10 * 1024 * 1024) {
         alert('文件太大，请选择小于 10MB 的音频文件');
         return;
@@ -230,7 +200,7 @@ export function TimerModal({
       reader.onload = () => {
         const newTrack: MusicTrack = {
           id: `custom-${Date.now()}`,
-          name: file.name.replace(/\.[^/.]+$/, ''), // 去掉扩展名
+          name: file.name.replace(/\.[^/.]+$/, ''),
           url: reader.result as string,
           type: 'custom'
         };
@@ -239,7 +209,6 @@ export function TimerModal({
         setMusicTracks(newTracks);
         saveCustomMusic(newTracks);
         
-        // 切换到新添加的音乐
         setTimeout(() => changeTrack(newTracks.length - 1), 100);
         
         alert(`已添加: ${newTrack.name}`);
@@ -259,7 +228,6 @@ export function TimerModal({
     setMusicTracks(newTracks);
     saveCustomMusic(newTracks);
     
-    // 如果删除的是当前播放的，切换到第一首
     if (trackIndex === currentTrackIndex) {
       changeTrack(0);
     }
@@ -284,7 +252,7 @@ export function TimerModal({
     };
   }, [isRunning]);
 
-  // 触摸事件处理
+  // 触摸事件
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
     touchStartX.current = e.touches[0].clientX;
     touchStartY.current = e.touches[0].clientY;
@@ -362,7 +330,6 @@ export function TimerModal({
     const totalDuration = existingDuration + Math.floor(seconds / 60);
     onComplete(totalDuration, note, images, isCompleteWork);
     
-    // 重置状态
     setSeconds(0);
     setShowComplete(false);
     setNote('');
@@ -422,7 +389,6 @@ export function TimerModal({
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
       >
-        {/* 顶部栏 */}
         <div className="flex items-center justify-between p-4 pt-12 bg-tangka-brown">
           <button
             onClick={() => setShowMusicPanel(false)}
@@ -440,7 +406,6 @@ export function TimerModal({
           </button>
         </div>
 
-        {/* 音乐列表 */}
         <div className="flex-1 overflow-y-auto bg-tangka-cream p-4">
           <div className="space-y-3">
             {musicTracks.map((track, index) => (
@@ -462,7 +427,7 @@ export function TimerModal({
                 <div className="flex-1 min-w-0">
                   <p className="font-medium truncate">{track.name}</p>
                   <p className="text-xs opacity-70">
-                    {track.type === 'built-in' ? '内置音乐' : '自定义音乐'}
+                    {track.type === 'built-in' ? '内置离线音乐' : '自定义音乐'}
                   </p>
                 </div>
                 {currentTrackIndex === index && (
@@ -482,7 +447,6 @@ export function TimerModal({
             ))}
           </div>
 
-          {/* 添加音乐提示 */}
           <div className="mt-6 p-4 bg-tangka-sand/30 rounded-xl">
             <h3 className="font-bold mb-2">添加自己的音乐</h3>
             <p className="text-sm text-gray-600 mb-3">
@@ -510,7 +474,6 @@ export function TimerModal({
         onTouchEnd={handleTouchEnd}
       >
         <div className="bg-tangka-cream rounded-3xl w-full max-w-md p-6 animate-in max-h-[90vh] overflow-y-auto relative">
-          {/* 返回按钮 */}
           <button 
             onClick={onClose}
             className="absolute top-4 left-4 p-2 hover:bg-tangka-sand rounded-full"
@@ -530,7 +493,6 @@ export function TimerModal({
           </div>
 
           <div className="space-y-4 mb-6">
-            {/* 作品完成标识 */}
             <div 
               onClick={() => setIsCompleteWork(!isCompleteWork)}
               className={`
@@ -620,7 +582,6 @@ export function TimerModal({
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
     >
-      {/* 顶部控制栏 */}
       <div className="flex justify-between items-center p-4 pt-12">
         <button
           onClick={stopTimer}
@@ -649,7 +610,6 @@ export function TimerModal({
         </div>
       </div>
 
-      {/* 计时显示 */}
       <div className="flex-1 flex flex-col items-center justify-center">
         <div className="text-center">
           <div className="text-8xl font-mono font-bold text-white tracking-wider mb-4">
@@ -662,9 +622,8 @@ export function TimerModal({
           )}
         </div>
 
-        {/* 音乐状态 */}
         {audioError && (
-          <p className="text-yellow-400 text-xs mt-4">{audioError}</p>
+          <p className="text-yellow-400 text-xs mt-4 px-4 text-center">{audioError}</p>
         )}
         {!audioLoaded && !audioError && (
           <p className="text-white/30 text-xs mt-4">正在加载音乐...</p>
@@ -676,12 +635,10 @@ export function TimerModal({
         )}
       </div>
 
-      {/* 滑动提示 */}
       <div className="absolute top-1/2 left-2 transform -translate-y-1/2 opacity-30 pointer-events-none">
         <div className="w-1 h-12 bg-white rounded-full" />
       </div>
 
-      {/* 底部控制 */}
       <div className="p-8 pb-16">
         <div className="flex justify-center gap-6">
           {!isRunning ? (

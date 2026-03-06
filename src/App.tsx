@@ -6,6 +6,7 @@ import { Records } from './pages/Records';
 import { Stats } from './pages/Stats';
 import { Gallery } from './pages/Gallery';
 import { Settings as SettingsPage } from './pages/Settings';
+import { initReminderOnStartup } from './stores/settingsStore';
 import './App.css';
 
 function Navigation() {
@@ -49,6 +50,9 @@ function App() {
     if ('Notification' in window && Notification.permission === 'default') {
       Notification.requestPermission();
     }
+    
+    // Initialize daily reminder
+    initReminderOnStartup();
   }, []);
   
   return (

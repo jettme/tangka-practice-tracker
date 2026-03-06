@@ -1,9 +1,9 @@
-import { useState, useRef } from 'react';
-import { useSettingsStore } from '../stores/settingsStore';
+import { useState, useRef, useEffect } from 'react';
+import { useSettingsStore, testReminder, requestNotificationPermission, initReminderOnStartup } from '../stores/settingsStore';
 import { ChangelogModal } from '../components/ChangelogModal';
 import { 
   Bell, User, Download, Upload, Trash2, 
-  ChevronRight, Palette, Gift, ExternalLink
+  ChevronRight, Palette, Gift, ExternalLink, BellRing, Volume2
 } from 'lucide-react';
 import { getLatestVersion } from '../data/changelog';
 
@@ -21,7 +21,18 @@ export function Settings() {
   const [showImportConfirm, setShowImportConfirm] = useState(false);
   const [importDataStr, setImportDataStr] = useState('');
   const [showChangelog, setShowChangelog] = useState(false);
+  const [notificationStatus, setNotificationStatus] = useState<'granted' | 'denied' | 'default'>('default');
   const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  // 检查通知权限
+  useEffect(() => {
+    if ('Notification' in window) {
+      setNotificationStatus(Notification.permission);
+    }
+    
+    // 初始化提醒
+    initReminderOnStartup();
+  }, []);
   
   async function handleExport() {
     const data = await exportData();
@@ -74,6 +85,29 @@ export function Settings() {
     }
   }
   
+  async function handleRequestPermission() {
+    const granted = await requestNotificationPermission();
+    setNotificationStatus(granted ? 'granted' : 'denied');
+    if (granted) {
+      alert('通知权限已开启！');
+    } else {
+      alert('请前往浏览器设置中允许通知权限');
+    }
+  }
+  
+  function handleTestReminder() {
+    testReminder();
+  }
+  
+  function handleToggleReminder(enabled: boolean) {
+    setReminder(enabled);
+    if (enabled) {
+      requestNotificationPermission().then(granted => {
+        setNotificationStatus(granted ? 'granted' : 'denied');
+      });
+    }
+  }
+  
   return (
     <div className="min-h-screen pb-24">
       <div className="px-4 pt-12 pb-4">
@@ -105,11 +139,50 @@ export function Settings() {
             <Bell className="w-5 h-5 text-tangka-red" />
             练习提醒
           </h3>
+          
+          {/* 通知权限状态 */}
+          <div className={`
+            p-3 rounded-xl mb-4 flex items-center gap-3
+            ${notificationStatus === 'granted' 
+              ? 'bg-green-100 text-green-700' 
+              : notificationStatus === 'denied'
+                ? 'bg-red-100 text-red-700'
+                : 'bg-yellow-100 text-yellow-700'
+            }
+          `}>
+            {notificationStatus === 'granted' ? (
+              <Volume2 className="w-5 h-5" />
+            ) : (
+              <BellRing className="w-5 h-5" />
+            )}
+            <div className="flex-1">
+              <p className="font-medium text-sm">
+                {notificationStatus === 'granted' 
+                  ? '通知权限已开启' 
+                  : notificationStatus === 'denied'
+                    ? '通知权限被拒绝'
+                    : '需要开启通知权限'
+                }
+              </p>
+            </div>
+            {notificationStatus !== 'granted' && (
+              <button
+                onClick={handleRequestPermission}
+                className="text-xs px-3 py-1 bg-white rounded-full font-medium"
+              >
+                去开启
+              </button>
+            )}
+          </div>
+          
           <div className="space-y-4">
             <div className="flex items-center justify-between">
-              <span>每日提醒</span>
+              <div>
+                <span className="font-medium">每日提醒</span>
+                <p className="text-xs text-gray-500">每天定时提醒练习</p>
+              </div>
               <button
-                onClick={() => setReminder(!dailyReminder)}
+                onClick={() => handleToggleReminder(!dailyReminder)}
                 className={`
                   w-12 h-7 rounded-full transition-colors relative
                   ${dailyReminder ? 'bg-tangka-red' : 'bg-gray-300'}
@@ -121,16 +194,32 @@ export function Settings() {
                 `} />
               </button>
             </div>
+            
             {dailyReminder && (
-              <div>
-                <label className="block text-sm text-gray-500 mb-1">提醒时间</label>
-                <input
-                  type="time"
-                  value={reminderTime}
-                  onChange={(e) => setReminder(true, e.target.value)}
-                  className="w-full p-3 bg-tangka-sand/30 rounded-xl focus:outline-none focus:ring-2 focus:ring-tangka-red/30"
-                />
-              </div>
+              <>
+                <div>
+                  <label className="block text-sm text-gray-500 mb-1">提醒时间</label>
+                  <input
+                    type="time"
+                    value={reminderTime}
+                    onChange={(e) => setReminder(true, e.target.value)}
+                    className="w-full p-3 bg-tangka-sand/30 rounded-xl focus:outline-none focus:ring-2 focus:ring-tangka-red/30"
+                  />
+                </div>
+                
+                {/* 测试提醒按钮 */}
+                <button
+                  onClick={handleTestReminder}
+                  className="w-full py-3 rounded-xl bg-tangka-gold/20 text-tangka-gold font-medium flex items-center justify-center gap-2 hover:bg-tangka-gold/30 transition-colors"
+                >
+                  <BellRing className="w-5 h-5" />
+                  测试提醒通知
+                </button>
+                
+                <p className="text-xs text-gray-500">
+                  点击"测试提醒"可立即收到一条测试通知，确认提醒功能正常
+                </p>
+              </>
             )}
           </div>
         </div>
