@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { LocalNotifications } from '@capacitor/local-notifications';
+import Reminder from '../plugins/ReminderPlugin';
 
 interface NotificationState {
   dailyReminder: boolean;
@@ -9,6 +10,8 @@ interface NotificationState {
   setReminder: (enabled: boolean, time?: string) => Promise<void>;
   checkAndTriggerReminder: () => Promise<boolean>;
   testNotification: () => Promise<void>;
+  checkExactAlarmPermission: () => Promise<boolean>;
+  requestExactAlarmPermission: () => Promise<void>;
 }
 
 // 检查是否在原生 App 环境
@@ -20,10 +23,13 @@ const isNative = () => {
 export async function checkNotificationPermission(): Promise<boolean> {
   if (isNative()) {
     try {
+      // 使用原生插件检查
+      const result = await Reminder.checkPermission();
+      return result.granted;
+    } catch {
+      // 降级到 LocalNotifications
       const { display } = await LocalNotifications.checkPermissions();
       return display === 'granted';
-    } catch {
-      return false;
     }
   } else {
     if (!('Notification' in window)) return false;
@@ -35,10 +41,11 @@ export async function checkNotificationPermission(): Promise<boolean> {
 export async function requestNotificationPermission(): Promise<boolean> {
   if (isNative()) {
     try {
+      const result = await Reminder.requestPermission();
+      return result.granted;
+    } catch {
       const { display } = await LocalNotifications.requestPermissions();
       return display === 'granted';
-    } catch {
-      return false;
     }
   } else {
     if (!('Notification' in window)) return false;
@@ -47,142 +54,93 @@ export async function requestNotificationPermission(): Promise<boolean> {
   }
 }
 
-// 显示本地通知
-export async function showLocalNotification(options: {
-  title: string;
-  body: string;
-  id?: number;
-}) {
-  const { title, body, id = 1 } = options;
+// 检查是否需要精确闹钟权限（Android 12+）
+async function checkExactAlarmPermission(): Promise<boolean> {
+  if (!isNative()) return true;
   
-  if (isNative()) {
-    try {
-      await LocalNotifications.schedule({
-        notifications: [
-          {
-            id,
-            title,
-            body,
-            sound: 'default',
-            smallIcon: 'ic_stat_icon',
-            iconColor: '#C62828',
-            ongoing: false,
-            autoCancel: true,
-          },
-        ],
-      });
-    } catch (error) {
-      console.error('Local notification error:', error);
-      showBrowserNotification(title, body);
-    }
-  } else {
-    showBrowserNotification(title, body);
+  try {
+    const result = await Reminder.canScheduleExactAlarms();
+    return result.canSchedule;
+  } catch {
+    return true;
   }
 }
 
-// 浏览器通知（降级方案）
-function showBrowserNotification(title: string, body: string) {
-  if ('Notification' in window && Notification.permission === 'granted') {
-    new Notification(title, {
-      body,
-      icon: '/icons/icon-192x192.png',
-      badge: '/icons/icon-72x72.png',
-    });
+// 请求精确闹钟权限
+async function requestExactAlarmPermission() {
+  if (!isNative()) return;
+  
+  try {
+    await Reminder.requestExactAlarmPermission();
+  } catch (error) {
+    console.error('Failed to request exact alarm permission:', error);
   }
 }
 
-// 调度每日提醒 - 使用每天重复
+// 调度每日提醒 - 使用原生 AlarmManager
 async function scheduleDailyReminder(time: string) {
   const [hours, minutes] = time.split(':').map(Number);
   
-  // 先取消之前的提醒
-  await cancelAllReminders();
-  
   if (isNative()) {
     try {
-      // 计算今天的提醒时间
-      const now = new Date();
-      const reminderTime = new Date();
-      reminderTime.setHours(hours, minutes, 0, 0);
-      
-      // 如果今天的时间已过，设置为明天
-      if (reminderTime <= now) {
-        reminderTime.setDate(reminderTime.getDate() + 1);
+      // 检查是否需要请求精确闹钟权限
+      const canSchedule = await checkExactAlarmPermission();
+      if (!canSchedule) {
+        console.log('Need exact alarm permission, requesting...');
+        await requestExactAlarmPermission();
       }
       
-      // 使用每天重复的通知
-      await LocalNotifications.schedule({
-        notifications: [
-          {
-            id: 1001, // 固定的ID，方便管理
-            title: '唐卡练习提醒',
-            body: '今天练习唐卡了吗？坚持就是进步！点击打开App开始练习。',
-            schedule: { 
-              on: {
-                hour: hours,
-                minute: minutes
-              }
-            },
-            sound: 'default',
-            smallIcon: 'ic_stat_icon',
-            iconColor: '#C62828',
-            ongoing: false,
-            autoCancel: true,
-          },
-        ],
-      });
+      // 使用原生插件调度闹钟
+      const result = await Reminder.scheduleReminder({ hour: hours, minute: minutes });
+      console.log('Native reminder scheduled:', result);
       
-      console.log('Daily reminder scheduled for:', reminderTime);
-      
-      // 保存调度信息到本地存储
-      localStorage.setItem('tangka-reminder-scheduled', JSON.stringify({
-        time: time,
-        scheduledAt: reminderTime.toISOString(),
-        enabled: true
-      }));
+      // 同时调度一个本地通知作为备份
+      await scheduleLocalNotificationBackup(hours, minutes);
       
     } catch (error) {
-      console.error('Schedule reminder error:', error);
-      
-      // 降级方案：使用多个单次通知
-      await scheduleMultipleNotifications(hours, minutes);
+      console.error('Failed to schedule native reminder:', error);
+      // 降级到 LocalNotifications
+      await scheduleLocalNotificationBackup(hours, minutes);
     }
   } else {
-    // 浏览器环境：使用后台检查
+    // 浏览器环境
     console.log('Browser environment: using background check');
   }
 }
 
-// 降级方案：预约未来7天的单次通知
-async function scheduleMultipleNotifications(hours: number, minutes: number) {
-  const notifications = [];
-  
-  for (let i = 0; i < 7; i++) {
-    const date = new Date();
-    date.setDate(date.getDate() + i);
-    date.setHours(hours, minutes, 0, 0);
+// 使用 LocalNotifications 作为备份
+async function scheduleLocalNotificationBackup(hours: number, minutes: number) {
+  try {
+    // 取消之前的备份通知
+    await LocalNotifications.cancel({ notifications: [{ id: 3001 }] });
     
-    // 如果今天的时间已过，从明天开始
-    if (i === 0 && date <= new Date()) {
-      date.setDate(date.getDate() + 1);
+    // 计算下一次提醒时间
+    const now = new Date();
+    const reminderTime = new Date();
+    reminderTime.setHours(hours, minutes, 0, 0);
+    
+    if (reminderTime <= now) {
+      reminderTime.setDate(reminderTime.getDate() + 1);
     }
     
-    notifications.push({
-      id: 2000 + i, // 不同的ID
-      title: '唐卡练习提醒',
-      body: '今天练习唐卡了吗？坚持就是进步！',
-      schedule: { at: date },
-      sound: 'default',
-      smallIcon: 'ic_stat_icon',
-      iconColor: '#C62828',
+    // 调度本地通知
+    await LocalNotifications.schedule({
+      notifications: [
+        {
+          id: 3001,
+          title: '唐卡练习提醒',
+          body: '今天练习唐卡了吗？坚持就是进步！',
+          schedule: { at: reminderTime },
+          sound: 'default',
+          ongoing: false,
+          autoCancel: true,
+        },
+      ],
     });
-  }
-  
-  try {
-    await LocalNotifications.schedule({ notifications });
-    console.log('Scheduled 7 days of reminders');
+    
+    console.log('Local notification backup scheduled for:', reminderTime);
   } catch (error) {
-    console.error('Failed to schedule multiple notifications:', error);
+    console.error('Failed to schedule local backup:', error);
   }
 }
 
@@ -190,18 +148,53 @@ async function scheduleMultipleNotifications(hours: number, minutes: number) {
 async function cancelAllReminders() {
   if (isNative()) {
     try {
-      // 取消所有已调度的通知
-      const pending = await LocalNotifications.getPending();
-      if (pending.notifications.length > 0) {
-        await LocalNotifications.cancel({ notifications: pending.notifications });
-        console.log('Cancelled', pending.notifications.length, 'pending notifications');
-      }
+      // 取消原生闹钟
+      await Reminder.cancelReminder();
     } catch (error) {
-      console.error('Cancel reminders error:', error);
+      console.error('Failed to cancel native reminder:', error);
+    }
+    
+    try {
+      // 取消本地通知
+      await LocalNotifications.cancel({ notifications: [{ id: 3001 }] });
+    } catch (error) {
+      console.error('Failed to cancel local notification:', error);
     }
   }
-  
-  localStorage.removeItem('tangka-reminder-scheduled');
+}
+
+// 显示测试通知
+async function showTestNotification() {
+  if (isNative()) {
+    try {
+      // 使用原生方式显示通知
+      await LocalNotifications.schedule({
+        notifications: [
+          {
+            id: 9999,
+            title: '唐卡练习打卡',
+            body: '这是一条测试提醒！如果看到这条消息，说明通知功能正常工作。',
+            sound: 'default',
+            ongoing: false,
+            autoCancel: true,
+          },
+        ],
+      });
+    } catch (error) {
+      console.error('Failed to show test notification:', error);
+      throw error;
+    }
+  } else {
+    // 浏览器环境
+    if ('Notification' in window && Notification.permission === 'granted') {
+      new Notification('唐卡练习打卡', {
+        body: '这是一条测试提醒！',
+        icon: '/icons/icon-192x192.png',
+      });
+    } else {
+      throw new Error('通知权限未开启');
+    }
+  }
 }
 
 export const useNotificationStore = create<NotificationState>()(
@@ -220,6 +213,8 @@ export const useNotificationStore = create<NotificationState>()(
           if (granted) {
             await scheduleDailyReminder(newTime);
             console.log('Reminder scheduled for:', newTime);
+          } else {
+            console.log('Notification permission not granted');
           }
         } else {
           await cancelAllReminders();
@@ -227,7 +222,7 @@ export const useNotificationStore = create<NotificationState>()(
         }
       },
 
-      // 检查并触发提醒（用于浏览器环境或检查状态）
+      // 检查并触发提醒（浏览器环境备用）
       checkAndTriggerReminder: async () => {
         const { dailyReminder, reminderTime, lastReminderDate } = get();
         
@@ -245,11 +240,7 @@ export const useNotificationStore = create<NotificationState>()(
         
         // 当前时间已经过了提醒时间
         if (now >= reminderDate) {
-          await showLocalNotification({
-            id: 100,
-            title: '唐卡练习提醒',
-            body: '今天练习唐卡了吗？坚持就是进步！',
-          });
+          await showTestNotification();
           set({ lastReminderDate: today });
           return true;
         }
@@ -264,13 +255,18 @@ export const useNotificationStore = create<NotificationState>()(
           throw new Error('通知权限未开启，请在系统设置中允许通知');
         }
         
-        await showLocalNotification({
-          id: 999,
-          title: '唐卡练习打卡',
-          body: '这是一条测试提醒！如果看到这条消息，说明通知功能正常工作。每天这个时间会提醒您练习唐卡。',
-        });
-        
+        await showTestNotification();
         console.log('Test notification sent');
+      },
+
+      // 检查精确闹钟权限
+      checkExactAlarmPermission: async () => {
+        return await checkExactAlarmPermission();
+      },
+
+      // 请求精确闹钟权限
+      requestExactAlarmPermission: async () => {
+        await requestExactAlarmPermission();
       },
     }),
     {
@@ -297,27 +293,7 @@ export async function initNotifications() {
   
   // 如果开启了提醒且有权限，确保提醒已调度
   if (store.dailyReminder && granted) {
-    // 检查是否已经有调度的通知
-    if (isNative()) {
-      try {
-        const pending = await LocalNotifications.getPending();
-        console.log('Pending notifications:', pending.notifications.length);
-        
-        // 如果没有调度的通知，重新调度
-        if (pending.notifications.length === 0) {
-          console.log('No pending notifications, rescheduling...');
-          await scheduleDailyReminder(store.reminderTime);
-        }
-      } catch (error) {
-        console.error('Error checking pending notifications:', error);
-        // 出错时重新调度
-        await scheduleDailyReminder(store.reminderTime);
-      }
-    }
+    console.log('Scheduling daily reminder...');
+    await scheduleDailyReminder(store.reminderTime);
   }
-  
-  // 每分钟检查一次（浏览器环境备用）
-  setInterval(() => {
-    store.checkAndTriggerReminder();
-  }, 60000);
 }

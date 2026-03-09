@@ -1,10 +1,11 @@
 import { useState, useRef, useEffect } from 'react';
 import { useSettingsStore } from '../stores/settingsStore';
 import { useNotificationStore, checkNotificationPermission, testNotification, initNotifications } from '../stores/notificationStore';
+import Reminder from '../plugins/ReminderPlugin';
 import { ChangelogModal } from '../components/ChangelogModal';
 import { 
   Bell, User, Download, Upload, Trash2, 
-  ChevronRight, Palette, Gift, ExternalLink, BellRing, Volume2, VolumeX
+  ChevronRight, Palette, Gift, ExternalLink, BellRing, Volume2, VolumeX, AlertCircle
 } from 'lucide-react';
 import { getLatestVersion } from '../data/changelog';
 
@@ -20,30 +21,43 @@ export function Settings() {
     dailyReminder,
     reminderTime,
     setReminder,
+    requestExactAlarmPermission,
   } = useNotificationStore();
   
   const [showImportConfirm, setShowImportConfirm] = useState(false);
   const [importDataStr, setImportDataStr] = useState('');
   const [showChangelog, setShowChangelog] = useState(false);
   const [notificationStatus, setNotificationStatus] = useState<'granted' | 'denied' | 'default'>('default');
+  const [exactAlarmStatus, setExactAlarmStatus] = useState<{ canSchedule: boolean; needPermission: boolean }>({ canSchedule: true, needPermission: false });
   const [isNativeApp, setIsNativeApp] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   // 检查通知权限和环境
   useEffect(() => {
-    const checkPermission = async () => {
-      const hasPermission = await checkNotificationPermission();
-      setNotificationStatus(hasPermission ? 'granted' : 'default');
-      
+    const checkPermissions = async () => {
       // 检测是否在原生 App 中
       const native = typeof (window as any).Capacitor !== 'undefined';
       setIsNativeApp(native);
+      
+      // 检查通知权限
+      const hasPermission = await checkNotificationPermission();
+      setNotificationStatus(hasPermission ? 'granted' : 'default');
+      
+      // 检查精确闹钟权限（Android 12+）
+      if (native) {
+        try {
+          const result = await Reminder.canScheduleExactAlarms();
+          setExactAlarmStatus(result);
+        } catch (error) {
+          console.error('Failed to check exact alarm permission:', error);
+        }
+      }
       
       // 初始化通知
       initNotifications();
     };
     
-    checkPermission();
+    checkPermissions();
   }, []);
   
   async function handleExport() {
@@ -98,13 +112,35 @@ export function Settings() {
   }
   
   async function handleRequestPermission() {
-    const { requestNotificationPermission } = await import('../stores/notificationStore');
-    const granted = await requestNotificationPermission();
+    const granted = await checkNotificationPermission();
     setNotificationStatus(granted ? 'granted' : 'denied');
-    if (granted) {
-      alert('通知权限已开启！');
-    } else {
-      alert('请在系统设置中允许通知权限');
+    
+    if (!granted) {
+      const { requestNotificationPermission } = await import('../stores/notificationStore');
+      const newGranted = await requestNotificationPermission();
+      setNotificationStatus(newGranted ? 'granted' : 'denied');
+    }
+    
+    // 同时检查精确闹钟权限
+    if (isNativeApp) {
+      try {
+        const result = await Reminder.canScheduleExactAlarms();
+        setExactAlarmStatus(result);
+      } catch (error) {
+        console.error('Failed to check exact alarm permission:', error);
+      }
+    }
+  }
+  
+  async function handleRequestExactAlarmPermission() {
+    try {
+      await requestExactAlarmPermission();
+      // 重新检查状态
+      const result = await Reminder.canScheduleExactAlarms();
+      setExactAlarmStatus(result);
+    } catch (error) {
+      console.error('Failed to request exact alarm permission:', error);
+      alert('请在系统设置中允许精确闹钟权限');
     }
   }
   
@@ -118,12 +154,39 @@ export function Settings() {
   }
   
   async function handleToggleReminder(enabled: boolean) {
-    setReminder(enabled);
     if (enabled) {
-      const { requestNotificationPermission } = await import('../stores/notificationStore');
-      const granted = await requestNotificationPermission();
+      // 先检查权限
+      const granted = await checkNotificationPermission();
       setNotificationStatus(granted ? 'granted' : 'denied');
+      
+      if (!granted) {
+        const { requestNotificationPermission } = await import('../stores/notificationStore');
+        const newGranted = await requestNotificationPermission();
+        setNotificationStatus(newGranted ? 'granted' : 'denied');
+        
+        if (!newGranted) {
+          alert('请先允许通知权限');
+          return;
+        }
+      }
+      
+      // 检查精确闹钟权限
+      if (isNativeApp) {
+        try {
+          const result = await Reminder.canScheduleExactAlarms();
+          setExactAlarmStatus(result);
+          
+          if (result.needPermission) {
+            alert('需要允许精确闹钟权限，才能准时提醒');
+            await handleRequestExactAlarmPermission();
+          }
+        } catch (error) {
+          console.error('Failed to check exact alarm permission:', error);
+        }
+      }
     }
+    
+    setReminder(enabled);
   }
   
   return (
@@ -189,11 +252,6 @@ export function Settings() {
                     : '需要开启通知权限'
                 }
               </p>
-              <p className="text-xs opacity-70">
-                {isNativeApp 
-                  ? '将在手机通知栏显示提醒' 
-                  : '浏览器通知可能不稳定'}
-              </p>
             </div>
             {notificationStatus !== 'granted' && (
               <button
@@ -205,11 +263,28 @@ export function Settings() {
             )}
           </div>
           
+          {/* 精确闹钟权限警告（Android 12+） */}
+          {isNativeApp && exactAlarmStatus.needPermission && (
+            <div className="p-3 rounded-xl mb-4 bg-orange-100 text-orange-700 flex items-center gap-3">
+              <AlertCircle className="w-5 h-5" />
+              <div className="flex-1">
+                <p className="font-medium text-sm">需要精确闹钟权限</p>
+                <p className="text-xs opacity-70">才能准时触发提醒</p>
+              </div>
+              <button
+                onClick={handleRequestExactAlarmPermission}
+                className="text-xs px-3 py-1 bg-white rounded-full font-medium"
+              >
+                允许
+              </button>
+            </div>
+          )}
+          
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <div>
                 <span className="font-medium">每日提醒</span>
-                <p className="text-xs text-gray-500">每天定时推送通知</p>
+                <p className="text-xs text-gray-500">每天准时推送通知（即使App关闭）</p>
               </div>
               <button
                 onClick={() => handleToggleReminder(!dailyReminder)}
@@ -254,7 +329,7 @@ export function Settings() {
                 )}
                 
                 <p className="text-xs text-gray-500">
-                  点击"测试提醒"会在手机通知栏显示一条测试消息
+                  设置后即使关闭App，也会在指定时间收到提醒
                 </p>
               </>
             )}
