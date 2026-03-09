@@ -1,37 +1,49 @@
 import { useState, useRef, useEffect } from 'react';
-import { useSettingsStore, testReminder, requestNotificationPermission, initReminderOnStartup } from '../stores/settingsStore';
+import { useSettingsStore } from '../stores/settingsStore';
+import { useNotificationStore, checkNotificationPermission, testNotification, initNotifications } from '../stores/notificationStore';
 import { ChangelogModal } from '../components/ChangelogModal';
 import { 
   Bell, User, Download, Upload, Trash2, 
-  ChevronRight, Palette, Gift, ExternalLink, BellRing, Volume2
+  ChevronRight, Palette, Gift, ExternalLink, BellRing, Volume2, VolumeX
 } from 'lucide-react';
 import { getLatestVersion } from '../data/changelog';
 
 export function Settings() {
   const {
-    dailyReminder,
-    reminderTime,
     userName,
-    setReminder,
     setUserName,
     exportData,
     importData,
   } = useSettingsStore();
   
+  const {
+    dailyReminder,
+    reminderTime,
+    setReminder,
+  } = useNotificationStore();
+  
   const [showImportConfirm, setShowImportConfirm] = useState(false);
   const [importDataStr, setImportDataStr] = useState('');
   const [showChangelog, setShowChangelog] = useState(false);
   const [notificationStatus, setNotificationStatus] = useState<'granted' | 'denied' | 'default'>('default');
+  const [isNativeApp, setIsNativeApp] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   
-  // 检查通知权限
+  // 检查通知权限和环境
   useEffect(() => {
-    if ('Notification' in window) {
-      setNotificationStatus(Notification.permission);
-    }
+    const checkPermission = async () => {
+      const hasPermission = await checkNotificationPermission();
+      setNotificationStatus(hasPermission ? 'granted' : 'default');
+      
+      // 检测是否在原生 App 中
+      const native = typeof (window as any).Capacitor !== 'undefined';
+      setIsNativeApp(native);
+      
+      // 初始化通知
+      initNotifications();
+    };
     
-    // 初始化提醒
-    initReminderOnStartup();
+    checkPermission();
   }, []);
   
   async function handleExport() {
@@ -86,25 +98,31 @@ export function Settings() {
   }
   
   async function handleRequestPermission() {
+    const { requestNotificationPermission } = await import('../stores/notificationStore');
     const granted = await requestNotificationPermission();
     setNotificationStatus(granted ? 'granted' : 'denied');
     if (granted) {
       alert('通知权限已开启！');
     } else {
-      alert('请前往浏览器设置中允许通知权限');
+      alert('请在系统设置中允许通知权限');
     }
   }
   
-  function handleTestReminder() {
-    testReminder();
+  async function handleTestReminder() {
+    try {
+      await testNotification();
+      alert('测试通知已发送，请查看手机通知栏！');
+    } catch (error) {
+      alert('发送失败：' + (error as Error).message);
+    }
   }
   
-  function handleToggleReminder(enabled: boolean) {
+  async function handleToggleReminder(enabled: boolean) {
     setReminder(enabled);
     if (enabled) {
-      requestNotificationPermission().then(granted => {
-        setNotificationStatus(granted ? 'granted' : 'denied');
-      });
+      const { requestNotificationPermission } = await import('../stores/notificationStore');
+      const granted = await requestNotificationPermission();
+      setNotificationStatus(granted ? 'granted' : 'denied');
     }
   }
   
@@ -138,6 +156,11 @@ export function Settings() {
           <h3 className="font-bold mb-4 flex items-center gap-2">
             <Bell className="w-5 h-5 text-tangka-red" />
             练习提醒
+            {isNativeApp && (
+              <span className="text-xs px-2 py-0.5 bg-blue-100 text-blue-600 rounded-full">
+                原生App
+              </span>
+            )}
           </h3>
           
           {/* 通知权限状态 */}
@@ -152,6 +175,8 @@ export function Settings() {
           `}>
             {notificationStatus === 'granted' ? (
               <Volume2 className="w-5 h-5" />
+            ) : notificationStatus === 'denied' ? (
+              <VolumeX className="w-5 h-5" />
             ) : (
               <BellRing className="w-5 h-5" />
             )}
@@ -163,6 +188,11 @@ export function Settings() {
                     ? '通知权限被拒绝'
                     : '需要开启通知权限'
                 }
+              </p>
+              <p className="text-xs opacity-70">
+                {isNativeApp 
+                  ? '将在手机通知栏显示提醒' 
+                  : '浏览器通知可能不稳定'}
               </p>
             </div>
             {notificationStatus !== 'granted' && (
@@ -179,7 +209,7 @@ export function Settings() {
             <div className="flex items-center justify-between">
               <div>
                 <span className="font-medium">每日提醒</span>
-                <p className="text-xs text-gray-500">每天定时提醒练习</p>
+                <p className="text-xs text-gray-500">每天定时推送通知</p>
               </div>
               <button
                 onClick={() => handleToggleReminder(!dailyReminder)}
@@ -210,14 +240,21 @@ export function Settings() {
                 {/* 测试提醒按钮 */}
                 <button
                   onClick={handleTestReminder}
-                  className="w-full py-3 rounded-xl bg-tangka-gold/20 text-tangka-gold font-medium flex items-center justify-center gap-2 hover:bg-tangka-gold/30 transition-colors"
+                  disabled={notificationStatus !== 'granted'}
+                  className="w-full py-3 rounded-xl bg-tangka-gold/20 text-tangka-gold font-medium flex items-center justify-center gap-2 hover:bg-tangka-gold/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <BellRing className="w-5 h-5" />
                   测试提醒通知
                 </button>
                 
+                {notificationStatus !== 'granted' && (
+                  <p className="text-xs text-orange-500">
+                    请先开启通知权限再测试
+                  </p>
+                )}
+                
                 <p className="text-xs text-gray-500">
-                  点击"测试提醒"可立即收到一条测试通知，确认提醒功能正常
+                  点击"测试提醒"会在手机通知栏显示一条测试消息
                 </p>
               </>
             )}
