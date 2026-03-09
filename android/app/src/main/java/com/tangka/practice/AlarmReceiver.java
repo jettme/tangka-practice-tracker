@@ -31,7 +31,7 @@ public class AlarmReceiver extends BroadcastReceiver {
         
         // 构建通知
         NotificationCompat.Builder builder = new NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_stat_icon)
+            .setSmallIcon(R.drawable.ic_launcher_foreground)
             .setContentTitle("唐卡练习提醒")
             .setContentText("今天练习唐卡了吗？坚持就是进步！点击开始练习。")
             .setPriority(NotificationCompat.PRIORITY_HIGH)
