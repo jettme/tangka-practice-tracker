@@ -52,7 +52,7 @@ function App() {
     }
     
     // Initialize notifications
-    initNotifications();
+    initNotifications().catch(console.error);
   }, []);
   
   return (
